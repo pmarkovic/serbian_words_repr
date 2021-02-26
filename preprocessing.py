@@ -169,7 +169,7 @@ def merge_tokens_dist():
                         total_tokens_dist[key] += value
 
     # Use only 690000 unique tokens for training (tokens that appear more than 5 times)
-    tokens_dist = {key: tokens_dist[key] 
+    total_tokens_dist = {key: total_tokens_dist[key] \
                   for key in sorted(total_tokens_dist, key=total_tokens_dist.__getitem__, reverse=True)[:TOTAL_TOKENS]}
 
     # Store the tokens distribution of the whole corpus
