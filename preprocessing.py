@@ -7,16 +7,26 @@ import concurrent.futures
 from collections import defaultdict
 
 
-fence = '=' * 20
-CORPORA = ["srWaC1.1.01.xml", "srWaC1.1.02.xml", "srWaC1.1.03.xml", 
-            "srWaC1.1.04.xml", "srWaC1.1.05.xml", "srWaC1.1.06.xml"]
+# Paths and names
+CORPORA = ["srWaC1.1.01", "srWaC1.1.02", "srWaC1.1.03", 
+            "srWaC1.1.04", "srWaC1.1.05", "srWaC1.1.06"]
 CORPUS_PATH = os.path.join(os.path.dirname(os.getcwd()), "corpus")
 DATA_PATH = os.path.join(os.getcwd(), "data")
-MIN_LENGTH = 6
 TOKENS_DIST_FILE = "_token_dist.json"
+
+# Constants
+# For logging purpose
+FENCE = '=' * 20
+# Token value for all number values in the corpus
 NUM_TOKEN = "NUM"
+# Limit number of tokens in vocabulary 
+# to include only tokens that appear more than 5 times
 TOTAL_TOKENS = 690000
+# Used for noise distribution
 ALPHA = 3/4
+# Minimum length of sentences 
+# that should be included into training examples
+MIN_LENGTH = 6
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", 
@@ -25,7 +35,26 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",
                     level=logging.INFO, 
                     datefmt="%d-%b-%y %H:%M:%S")
 
-def parse(iterator, dist):
+
+def parse(iterator, tokens_dist):
+    """
+    Helper function to parse single <s> tag
+    to extract a sentence from it.
+    ...
+
+    Parameters:
+    -----------
+    iterator: iter
+        Iterator object of <s> tag to retrieve its elements.
+    tokens_dist: dict
+        A dictionary to store distribution of tokens.
+
+    Return:
+    -------
+    str
+        Actual sentence from the <s> tag.
+    """
+    
     sent = list()
 
     for i in iterator:
@@ -36,6 +65,7 @@ def parse(iterator, dist):
             if len(tokens) < 2:
                 continue
 
+            # At position 1 is lowercased word
             token = tokens[1]
 
             # Include only numeric or alphabetic tokens
@@ -46,24 +76,39 @@ def parse(iterator, dist):
                 continue
 
             sent.append(token)
-            dist[token] += 1
+            tokens_dist[token] += 1
 
     return ' '.join(sent)
 
 
-def parse_corpus(corpus_name):
-    print(f"Processing {corpus_name}...")
+def parse_corpus(file_name):
+    """
+    Helper function that parse a single corpus file,
+    since the whole corpus is divided into 6 separate files.
+    For every file, new directory will be created to store parsed text
+    and a json file for tokens distribution of that file.
+    ...
+
+    Parameter:
+    ----------
+    file_name: str
+        A name of a particular file of the corpus (without extension).
+    """
+
+    print(f"Processing {file_name}...")
     corpus_start_time = time.time()
 
-    context = etree.iterparse(os.path.join(CORPUS_PATH, corpus_name), events=("start", "end"))
-    corpus_id = corpus_name[:-4]
-    data_dir = os.path.join(DATA_PATH, corpus_id)
+    context = etree.iterparse(os.path.join(CORPUS_PATH, f"{file_name}.xml"), events=("start", "end"))
+    data_dir = os.path.join(DATA_PATH, file_name)
     tokens_dist = defaultdict(float)
 
+    # Create separate directory for every file
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
     
-    with open(f"{os.path.join(data_dir, corpus_id)}.txt", 'a') as txt_file:
+    # Parse the file to extract sentences from <s> tags and
+    # write to a new .txt file where every sentence will be in separate line
+    with open(f"{os.path.join(data_dir, file_name)}.txt", 'a') as txt_file:
         for event, element in context:
             if event == "start" and element.tag == 's':
                 sent = parse(element.itertext(), tokens_dist)
@@ -71,13 +116,20 @@ def parse_corpus(corpus_name):
             elif event == "end":
                 element.clear()
     
-    with open(f"{os.path.join(data_dir, corpus_id)}{TOKENS_DIST_FILE}", 'w') as json_file:
+    # Save tokens distribution (counts) from the current file
+    with open(f"{os.path.join(data_dir, file_name)}{TOKENS_DIST_FILE}", 'w') as json_file:
         json.dump(tokens_dist, json_file, indent=4)
     
-    print(f"Corpus {corpus_id} total time: {round(time.time() - corpus_start_time, 2)}s")
+    print(f"Corpus {file_name} total time: {round(time.time() - corpus_start_time, 2)}s")
 
 
-def transform_corpora():
+def transform_corpus():
+    """
+    Transform_corpus function is the first step in the preprocessing phase.
+    The corpus consists of 6 separate files in xml format and sentences are stored in <s> tags.
+    This function simply creates separate processes to parse files.
+    """
+    
     start_transform_time = time.time()
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
@@ -87,26 +139,40 @@ def transform_corpora():
 
 
 def merge_tokens_dist():
+    """
+    Merge_tokens_dist is the second step in the preprocessing phase.
+    Since tokens distributions of files are created separately, this function
+    merge them to the tokens distribution of the whole corpus. And stores it
+    as a json file in the data directory.
+    """
+
     print("Start merging tokens distributions...")
     merging_start_time = time.time()
     total_tokens_dist = defaultdict(float)
 
+    # List directories in the data directory
     for dir in os.listdir(DATA_PATH):
         dir_path = os.path.join(DATA_PATH, dir)
 
+        # Ignore any file
         if not os.path.isdir(dir_path):
             continue
         
         for file in os.listdir(dir_path):
+            # Check for tokens distribution file
             if file.endswith(TOKENS_DIST_FILE):
                 with open(f"{os.path.join(dir_path, file)}", 'r') as json_file:
                     tokens_dist = json.load(json_file)
 
+                    # Merge tokens into single dictionary
                     for key, value in tokens_dist.items():
                         total_tokens_dist[key] += value
 
-    tokens_dist = {key: tokens_dist[key] for key in sorted(total_tokens_dist, key=total_tokens_dist.__getitem__, reverse=True)[:TOTAL_TOKENS]}
+    # Use only 690000 unique tokens for training (tokens that appear more than 5 times)
+    tokens_dist = {key: tokens_dist[key] 
+                  for key in sorted(total_tokens_dist, key=total_tokens_dist.__getitem__, reverse=True)[:TOTAL_TOKENS]}
 
+    # Store the tokens distribution of the whole corpus
     with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'w') as json_file:
         json.dump(total_tokens_dist, json_file, indent=4)
 
@@ -115,28 +181,44 @@ def merge_tokens_dist():
 
 
 def clean_corpus():
+    """
+    Clean_corpus is the third step in the preprocessing phase.
+    The function merge sentences from all processed files and 
+    discard tokens from sentences if they are not included in tokens distribution.
+    Additionally, the sentences which length is less than 6 tokens are removed.
+    Lastly, the function prints minimum stats regarding corpus.
+    """
+
     print("Starting to clean the corpus...")
-    create_start_time = time.time()
+    clean_start_time = time.time()
+    
+    # Basic stats of the corpus
     total_num_sents = 0.0
     avg_sent_len = 0.0
     total_num_tokens = 0.0
     train_num_sents = 0.0
     avg_train_sent_len = 0.0
-    total_num_train_tokens = 0.0
     tokens_dist = {}
+
+    # Required for noise distribution
+    total_num_train_tokens = 0.0
     noise_dist = defaultdict(float)
 
+    # Load tokens distribution
     with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'r') as json_file:
         tokens_dist = json.load(json_file)
 
     for dir in os.listdir(DATA_PATH):
         dir_path = os.path.join(DATA_PATH, dir)
 
+        # Ignore any file
         if not os.path.isdir(dir_path):
             continue
 
         print(f"Processing {dir} directory...")
         for file in os.listdir(dir_path):
+
+            # Ignore non-text files
             if not file.endswith(".txt"):
                 continue
             
@@ -149,21 +231,24 @@ def clean_corpus():
                     train_sent = []
 
                     for token in tokens:
+                        # Discard tokens which are not in the final distribution
                         if token in tokens_dist:
                             train_sent.append(token)
                     
-                    if len(train_sent) > 5:
-                        train_num_sents += 1
-                        avg_train_sent_len += len(train_sent)
-                        total_num_train_tokens += len(train_sent)
+                    # Discard sentences with legth less than 6
+                    if len(train_sent) < MIN_LENGTH:
+                        continue
 
-                        for token in train_sent:
-                            noise_dist[token] += 1
-                    
-                        with open(f"{os.path.join(DATA_PATH, 'train_set.txt')}", 'a') as txt_file:
-                            txt_file.write(f"{' '.join(train_sent)}\n")
+                    train_num_sents += 1
+                    avg_train_sent_len += len(train_sent)
+                    total_num_train_tokens += len(train_sent)
+
+                    for token in train_sent:
+                        noise_dist[token] += 1
+                
+                    with open(f"{os.path.join(DATA_PATH, 'train_set.txt')}", 'a') as txt_file:
+                        txt_file.write(f"{' '.join(train_sent)}\n")
     
-    print("Creating noise distribution...")
     # Create noise distribution
     Z = 0.0
     for key in noise_dist.keys():
@@ -185,17 +270,17 @@ def clean_corpus():
     print(f"Average train sentence length: {round(avg_train_sent_len / train_num_sents, 2)}")
     print()
 
-    logging.info(f"Total cleaning time: {round(time.time() - create_start_time, 2)}s")
+    logging.info(f"Total cleaning time: {round(time.time() - clean_start_time, 2)}s")
     print("Finished cleaning the corpus!")
 
 
 if __name__ == "__main__":
-    logging.info(f"{fence}Program started{fence}")
+    logging.info(f"{FENCE}Program started{FENCE}")
     program_start_time = time.time()
 
-    #transform_corpora()
-    #merge_tokens_dist()
+    transform_corpus()
+    merge_tokens_dist()
     clean_corpus()
 
     logging.info(f"Total time: {round(time.time() - program_start_time, 2)}s")
-    logging.info(f"{fence}Program finished{fence}")
+    logging.info(f"{FENCE}Program finished{FENCE}")
