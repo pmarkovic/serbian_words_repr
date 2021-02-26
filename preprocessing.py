@@ -15,6 +15,8 @@ DATA_PATH = os.path.join(os.getcwd(), "data")
 MIN_LENGTH = 6
 TOKENS_DIST_FILE = "_token_dist.json"
 NUM_TOKEN = "NUM"
+TOTAL_TOKENS = 690000
+ALPHA = 3/4
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", 
@@ -103,6 +105,8 @@ def merge_tokens_dist():
                     for key, value in tokens_dist.items():
                         total_tokens_dist[key] += value
 
+    tokens_dist = {key: tokens_dist[key] for key in sorted(total_tokens_dist, key=total_tokens_dist.__getitem__, reverse=True)[:TOTAL_TOKENS]}
+
     with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'w') as json_file:
         json.dump(total_tokens_dist, json_file, indent=4)
 
@@ -110,32 +114,28 @@ def merge_tokens_dist():
     print("Finished merging tokens distributions!")
 
 
-def create_train_sets():
-    print("Starting to create training set...")
+def clean_corpus():
+    print("Starting to clean the corpus...")
     create_start_time = time.time()
     total_num_sents = 0.0
     avg_sent_len = 0.0
+    total_num_tokens = 0.0
     train_num_sents = 0.0
     avg_train_sent_len = 0.0
-    total_num_tokens = 0.0
-    less_five_tokens = 0.0
-
+    total_num_train_tokens = 0.0
     tokens_dist = {}
+    noise_dist = defaultdict(float)
 
     with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'r') as json_file:
         tokens_dist = json.load(json_file)
-    
-    total_num_tokens = len(tokens_dist.keys())
-    tokens_dist = {key: value for key, value in tokens_dist.items() if value > 5}
-    less_five_tokens = len(tokens_dist.keys())
 
     for dir in os.listdir(DATA_PATH):
-        print(f"Processing {dir} directory...")
         dir_path = os.path.join(DATA_PATH, dir)
 
         if not os.path.isdir(dir_path):
             continue
-        
+
+        print(f"Processing {dir} directory...")
         for file in os.listdir(dir_path):
             if not file.endswith(".txt"):
                 continue
@@ -144,6 +144,7 @@ def create_train_sets():
                 for line in txt_file:
                     tokens = line.split(' ')
                     total_num_sents += 1
+                    total_num_tokens += len(tokens)
                     avg_sent_len += len(tokens)
                     train_sent = []
 
@@ -154,6 +155,27 @@ def create_train_sets():
                     if len(train_sent) > 5:
                         train_num_sents += 1
                         avg_train_sent_len += len(train_sent)
+                        total_num_train_tokens += len(train_sent)
+
+                        for token in train_sent:
+                            noise_dist[token] += 1
+                    
+                        with open(f"{os.path.join(DATA_PATH, 'train_set.txt')}", 'a') as txt_file:
+                            txt_file.write(f"{' '.join(train_sent)}\n")
+    
+    print("Creating noise distribution...")
+    # Create noise distribution
+    Z = 0.0
+    for key in noise_dist.keys():
+        noise_dist[key] /= total_num_train_tokens
+        noise_dist[key] **= ALPHA
+        Z += noise_dist[key]
+  
+    for key in noise_dist.keys():
+        noise_dist[key] /= Z
+
+    with open(f"{os.path.join(DATA_PATH, 'noise_dist.json')}", 'w') as json_file:
+        json.dump(noise_dist, json_file, indent=4)
 
     print(f"Total number of sentences: {total_num_sents}")
     print(f"Average sentence length: {round(avg_sent_len / total_num_sents, 2)}") 
@@ -161,10 +183,10 @@ def create_train_sets():
     print()
     print(f"Total number of train sentences: {train_num_sents}")
     print(f"Average train sentence length: {round(avg_train_sent_len / train_num_sents, 2)}")
-    print(f"Total number of train tokens: {less_five_tokens}")
     print()
-    logging.info(f"Total creation time: {round(time.time() - create_start_time, 2)}s")
-    print("Finished creating train set!")
+
+    logging.info(f"Total cleaning time: {round(time.time() - create_start_time, 2)}s")
+    print("Finished cleaning the corpus!")
 
 
 if __name__ == "__main__":
@@ -173,7 +195,7 @@ if __name__ == "__main__":
 
     #transform_corpora()
     #merge_tokens_dist()
-    create_train_sets()
+    clean_corpus()
 
     logging.info(f"Total time: {round(time.time() - program_start_time, 2)}s")
     logging.info(f"{fence}Program finished{fence}")
