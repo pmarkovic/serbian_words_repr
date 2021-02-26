@@ -111,15 +111,69 @@ def merge_tokens_dist():
 
 
 def create_train_sets():
-    pass
+    print("Starting to create training set...")
+    create_start_time = time.time()
+    total_num_sents = 0.0
+    avg_sent_len = 0.0
+    train_num_sents = 0.0
+    avg_train_sent_len = 0.0
+    total_num_tokens = 0.0
+    less_five_tokens = 0.0
+
+    tokens_dist = {}
+
+    with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'r') as json_file:
+        tokens_dist = json.load(json_file)
+    
+    total_num_tokens = len(tokens_dist.keys())
+    tokens_dist = {key: value for key, value in tokens_dist.items() if value > 5}
+    less_five_tokens = len(tokens_dist.keys())
+
+    for dir in os.listdir(DATA_PATH):
+        print(f"Processing {dir} directory...")
+        dir_path = os.path.join(DATA_PATH, dir)
+
+        if not os.path.isdir(dir_path):
+            continue
+        
+        for file in os.listdir(dir_path):
+            if not file.endswith(".txt"):
+                continue
+            
+            with open(f"{os.path.join(dir_path, file)}", 'r') as txt_file:
+                for line in txt_file:
+                    tokens = line.split(' ')
+                    total_num_sents += 1
+                    avg_sent_len += len(tokens)
+                    train_sent = []
+
+                    for token in tokens:
+                        if token in tokens_dist:
+                            train_sent.append(token)
+                    
+                    if len(train_sent) > 5:
+                        train_num_sents += 1
+                        avg_train_sent_len += len(train_sent)
+
+    print(f"Total number of sentences: {total_num_sents}")
+    print(f"Average sentence length: {round(avg_sent_len / total_num_sents, 2)}") 
+    print(f"Total number of tokens: {total_num_tokens}")
+    print()
+    print(f"Total number of train sentences: {train_num_sents}")
+    print(f"Average train sentence length: {round(avg_train_sent_len / train_num_sents, 2)}")
+    print(f"Total number of train tokens: {less_five_tokens}")
+    print()
+    logging.info(f"Total creation time: {round(time.time() - create_start_time, 2)}s")
+    print("Finished creating train set!")
 
 
 if __name__ == "__main__":
     logging.info(f"{fence}Program started{fence}")
     program_start_time = time.time()
 
-    transform_corpora()
-    merge_tokens_dist()
+    #transform_corpora()
+    #merge_tokens_dist()
+    create_train_sets()
 
     logging.info(f"Total time: {round(time.time() - program_start_time, 2)}s")
     logging.info(f"{fence}Program finished{fence}")
