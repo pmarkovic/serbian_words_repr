@@ -13,7 +13,7 @@ CORPORA = ["srWaC1.1.01.xml", "srWaC1.1.02.xml", "srWaC1.1.03.xml",
 CORPUS_PATH = os.path.join(os.path.dirname(os.getcwd()), "corpus")
 DATA_PATH = os.path.join(os.getcwd(), "data")
 MIN_LENGTH = 6
-
+TOKENS_DIST_FILE = "_token_dist.json"
 NUM_TOKEN = "NUM"
 
 
@@ -69,7 +69,7 @@ def parse_corpus(corpus_name):
             elif event == "end":
                 element.clear()
     
-    with open(f"{os.path.join(data_dir, corpus_id)}_token_dist.json", 'w') as json_file:
+    with open(f"{os.path.join(data_dir, corpus_id)}{TOKENS_DIST_FILE}", 'w') as json_file:
         json.dump(tokens_dist, json_file, indent=4)
     
     print(f"Corpus {corpus_id} total time: {round(time.time() - corpus_start_time, 2)}s")
@@ -96,7 +96,7 @@ def merge_tokens_dist():
             continue
         
         for file in os.listdir(dir_path):
-            if file.endswith("_token_dist.json"):
+            if file.endswith(TOKENS_DIST_FILE):
                 with open(f"{os.path.join(dir_path, file)}", 'r') as json_file:
                     tokens_dist = json.load(json_file)
 
