@@ -1,32 +1,8 @@
 import os
 import json
-import time
 import argparse
 import numpy as np
-
-
-NOISE_DIST_PATH = os.path.join(os.getcwd(), "data", "noise_dist.json")
-
-
-def arg_parser():
-    """ takes user input """
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--examples_path", default="data/examples.json", 
-                        help="Path to the json file where to store training examples (default=data/examples.json).")
-    parser.add_argument("--data_path", default="data/train_set.txt",
-                        help="Path to the file where training data are stored (default=data/train_set.txt).")
-    parser.add_argument("--seed", default=892,
-                        help="Seed for random numbers generator (default=892).")
-    parser.add_argument("--wind_size", default=5, 
-                        help="Max window size for surrounding context words (default=5).")
-    parser.add_argument("--neg_sample", default=5,
-                        help="Number of negative samples to pick (default=5).")
-
-    args = parser.parse_args()
-
-    return args
+import torch
 
 
 class DataHandler:
@@ -35,13 +11,14 @@ class DataHandler:
                 train_set_path, 
                 word2ind_path, 
                 noise_dist_path,
-                is_sg=False, 
-                ws=5, 
-                neg_samples=5):
+                is_sg, 
+                ws, 
+                neg_samples):
 
         self.train_set_path = train_set_path
         self.is_sg = is_sg
         self.word2ind = None
+        self.voc_size = None
         self.noise_dist = None
         self.max_ws = ws 
         self.neg_samples = neg_samples
@@ -52,17 +29,26 @@ class DataHandler:
     def _init_dictionaries(self, word2ind_path, noise_dist_path):
         with open(word2ind_path, 'r') as json_file:
             self.word2ind = json.load(json_file)
+        
+        self.voc_size = len(self.word2ind)
 
         with open(noise_dist_path, 'r') as json_file:
             self.noise_dist = json.load(json_file)
 
+    def get_voc_size(self):
+        return self.voc_size
+
+    def get_one_hot_encoding(self, word_idx):
+        x = torch.zeros(self.voc_size).float()
+        x[word_idx] = 1.0
+
+        return x
     
     def get_examples(self):
         if self.is_sg:
             return self.get_sg_example()
         
         return self.get_cbow_example()
-
 
     def get_sg_example(self):
         tokens = list(self.noise_dist.keys())
@@ -85,8 +71,13 @@ class DataHandler:
                             samples_ind = [self.word2ind[sample] 
                                         for sample in np.random.choice(tokens, size=5, p=tokens_prob)]
                             yield center_ind, self.word2ind[sent[context_pos]], samples_ind
-
     
     def get_cbow_example(self):
         pass
+
+    def save_params(self, params, path):
+        with open(path, 'w') as txt_file:
+            for ind, p in enumerate(params.numpy()):
+                txt_file.write(f"{ind},{p}\n")
+
 
