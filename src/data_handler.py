@@ -53,11 +53,9 @@ class DataHandler:
     def get_sg_example(self):
         tokens = list(self.noise_dist.keys())
         tokens_prob = list(self.noise_dist.values())
-        counter = 0
 
         with open(self.train_set_path, 'r') as txt_file:
             for line in txt_file:
-                counter += 1
             
                 sent = line.strip().split()
                 for pos, word in enumerate(sent):
@@ -69,15 +67,37 @@ class DataHandler:
 
                         if 0 <= context_pos < len(sent) and context_pos != pos:
                             samples_ind = [self.word2ind[sample] 
-                                        for sample in np.random.choice(tokens, size=5, p=tokens_prob)]
+                                        for sample in np.random.choice(tokens, 
+                                                                       size=self.neg_samples, 
+                                                                       p=tokens_prob)]
                             yield center_ind, self.word2ind[sent[context_pos]], samples_ind
     
     def get_cbow_example(self):
-        pass
+        tokens = list(self.noise_dist.keys())
+        tokens_prob = list(self.noise_dist.values())
+
+        with open(self.train_set_path, 'r') as txt_file:
+            for line in txt_file:
+            
+                sent = line.strip().split()
+                for pos, word in enumerate(sent):
+                    center_ind = self.word2ind[word]
+                    context_words = []
+                    ws = np.random.randint(2, min(self.max_ws+1, len(sent)))
+
+                    for w in range(-ws, ws+1):
+                        context_pos = pos + w 
+
+                        if 0 <= context_pos < len(sent) and context_pos != pos:
+                            context_words.append(self.word2ind[sent[context_pos]])
+                    
+                    samples_ind = [self.word2ind[sample] 
+                                for sample in np.random.choice(tokens, 
+                                                               size=self.neg_samples, 
+                                                               p=tokens_prob)]
+                    yield center_ind, context_words, samples_ind
 
     def save_params(self, params, path):
         with open(path, 'w') as txt_file:
             for ind, p in enumerate(params.numpy()):
                 txt_file.write(f"{ind},{p}\n")
-
-
