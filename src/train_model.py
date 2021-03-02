@@ -5,8 +5,8 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from src.models import SkipGram, CBOW
-from src.data_handler import DataHandler
+from models import SkipGram, CBOW
+from data_handler import DataHandler
 
 
 def arg_parser():
@@ -18,7 +18,7 @@ def arg_parser():
                         help="Path to the training data (default=data/train_set.txt).")
     parser.add_argument("--w2i_path", default="data/word2ind.json",
                         help="Path to the word2ind dict (default=data/word2ind.json).")
-    parser.add_argument("--nd_pathh", default="data/noise_dist.json",
+    parser.add_argument("--nd_path", default="data/noise_dist.json",
                         help="Path to the noise dist dict (default=data/noise_dist.json).")
     parser.add_argument("--params_path", default="data/params.txt", 
                         help="Path where to store trained parameters/embeddings (default=data/params.txt).")
@@ -36,6 +36,8 @@ def arg_parser():
                         help="Max window size for surrounding context words (default=5).")
     parser.add_argument("--neg_sample", default=5,
                         help="Number of negative samples to pick (default=5).")
+    parser.add_argument("--max_example", default=100,
+                        help="For testing on smaller number of examples (default=100).")
 
     args = parser.parse_args()
 
@@ -45,7 +47,7 @@ def arg_parser():
 def train(args):
     embed_dim = args.embed_dim
     num_epochs = args.epochs
-    lr = args.lf
+    lr = args.lr
 
     # For the reproducibility purpose
     torch.manual_seed(args.seed)
@@ -55,6 +57,9 @@ def train(args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
+    print("Model:")
+    print(f"Is SG: {args.is_sg}")
+    print(f"Embed dim: {embed_dim}")
 
     data_handler = DataHandler(args.data_path, args.w2i_path, args.nd_path,
                                args.is_sg, args.wind_size, args.neg_sample)
@@ -74,13 +79,17 @@ def train(args):
 
         for vi_ind, vo_ind, neg_samples_ind in data_handler.get_examples():
             vi = data_handler.get_one_hot_encoding(vi_ind).to(device)
-            vo = data_handler.get_one_hot_encoding(vo_ind).to(device)
+
+            if args.is_sg:
+                vo = data_handler.get_one_hot_encoding(vo_ind).to(device)
+            else:
+                vo = torch.stack(list(map(data_handler.get_one_hot_encoding, 
+                                            vo_ind))).to(device)
             neg_samples = torch.stack(list(map(data_handler.get_one_hot_encoding, 
                                                 neg_samples_ind))).to(device)
             num_examples += 1
 
             curr_loss = model(vi, vo, neg_samples)
-
             loss += curr_loss
             curr_loss.backward()
 
@@ -88,9 +97,13 @@ def train(args):
 
             optimizer.zero_grad()
 
-        print(f"Loss after {epoch+1} epoch: {round(loss / num_examples, 2)}")
+            if num_examples == int(args.max_example):
+                break
+
+        print(f"Loss after {epoch+1} epoch: {loss / num_examples}")
     
     params = model.get_trained_parameters()
+    print("Saving model parameters...")
     data_handler.save_params(params, args.params_path)
 
 

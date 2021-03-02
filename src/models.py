@@ -52,7 +52,7 @@ class CBOW(nn.Module):
 
         # Get context embeddings for each context word and
         # average them to one context embedding vector
-        vi_embed = torch.matmul(self.U.T, vi).mean(dim=1)
+        vi_embed = torch.matmul(vi, self.U).mean(dim=0)
 
         left = F.logsigmoid(vi_embed @ vo_embed)
 
