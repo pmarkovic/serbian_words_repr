@@ -20,8 +20,8 @@ def arg_parser():
                         help="Path to the word2ind dict (default=data/word2ind.json).")
     parser.add_argument("--nd_pathh", default="data/noise_dist.json",
                         help="Path to the noise dist dict (default=data/noise_dist.json).")
-    parser.add_argument("--params_path", default="data/params.json", 
-                        help="Path where to store trained parameters/embeddings (default=data/params.json).")
+    parser.add_argument("--params_path", default="data/params.txt", 
+                        help="Path where to store trained parameters/embeddings (default=data/params.txt).")
     parser.add_argument("--is_sg", default=False, action="store_true",
                         help="Flag to indicate which model to use (default=False).")
     parser.add_argument("--embed_dim", default=300,
