@@ -251,7 +251,7 @@ def clean_corpus():
                     
                     # Include only first 100000 from every file
                     if train_num_sents % LIMIT == 0:
-                        return
+                        break
     
     # Create noise distribution
     Z = 0.0
