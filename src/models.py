@@ -1,3 +1,4 @@
+from numpy import left_shift
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -23,12 +24,13 @@ class SkipGram(nn.Module):
         vi_embed = vi @ self.V
         vo_embed = vo @ self.U
 
-        left = F.logsigmoid(vi_embed @ vo_embed)
+        left = F.logsigmoid(torch.sum(vi_embed * vo_embed, dim=1, keepdim=True))
 
-        neg_samples_embed = neg_samples @ self.U
-        right = torch.sum(F.logsigmoid(-1*(neg_samples_embed @ vi_embed)))
+        neg_samples_embed = torch.matmul(neg_samples, self.U)
+        batch_mul = torch.bmm(neg_samples_embed, vi_embed.unsqueeze(dim=2)).squeeze()
+        right = torch.sum(F.logsigmoid(-1*batch_mul), dim=1, keepdim=True)
 
-        return -1*(left + right)
+        return torch.mean(-1*(left + right))
 
     def get_trained_parameters(self):
        return (self.V + self.U) / 2 
@@ -50,16 +52,26 @@ class CBOW(nn.Module):
     def forward(self, vo, vi, neg_samples):
         vo_embed = vo @ self.V
 
+        print(f"vo_embed: {vo_embed.shape}")
+
         # Get context embeddings for each context word and
         # average them to one context embedding vector
-        vi_embed = torch.matmul(vi, self.U).mean(dim=0)
+        vi_embed = torch.matmul(vi, self.U).mean(dim=1)
+        print(f"vi: {vi.shape}")
+        print(f"vi_embed: {vi_embed.shape}")
 
-        left = F.logsigmoid(vi_embed @ vo_embed)
+        left = F.logsigmoid(torch.sum(vo_embed * vi_embed, dim=1, keepdim=True))
 
-        neg_samples_embed = neg_samples @ self.U
-        right = torch.sum(F.logsigmoid(-1*(neg_samples_embed @ vi_embed)))
+        print(f"left: {left.shape}")
 
-        return -1*(left + right)
+        neg_samples_embed = torch.matmul(neg_samples, self.U)
+        print(f"neg_samples_embed: {neg_samples_embed.shape}")
+        batch_mul = torch.bmm(neg_samples_embed, vo_embed.unsqueeze(dim=2)).squeeze()
+        print(f"batch_mul: {batch_mul.shape}")
+        right = torch.sum(F.logsigmoid(-1*batch_mul), dim=1, keepdim=True)
+        print(f"right: {right.shape}")
+
+        return torch.mean(-1*(left + right))
 
     def get_trained_parameters(self):
         return (self.V + self.U) / 2

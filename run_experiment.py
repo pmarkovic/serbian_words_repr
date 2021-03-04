@@ -18,18 +18,17 @@ if __name__ == "__main__":
 
     config = ScriptRunConfig(source_directory='./src',
                              script='train_model.py',
-                             arguments=["--is_sg"],
                              compute_target='gpu-cluster',
                              environment=pytorch_env)
 
 
-    experiment = Experiment(workspace=ws, name='sg300-experiment1')
+    experiment = Experiment(workspace=ws, name='cbow300-experiment1')
     run = experiment.submit(config)
 
     aml_url = run.get_portal_url()
     print(aml_url)
 
-    run.wait_for_completion(show_output=True)
+    #run.wait_for_completion(show_output=True)
     
-    run.download_file(name='data/params.txt', output_file_path='./src/data/params.txt'), 
+    #run.download_file(name='data/params.txt', output_file_path='./src/data/params.txt'), 
 
