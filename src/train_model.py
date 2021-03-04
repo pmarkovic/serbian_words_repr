@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+from azureml.core import Run
+
 from models import SkipGram, CBOW
 from data_handler import DataHandler
 
@@ -36,8 +38,6 @@ def arg_parser():
                         help="Max window size for surrounding context words (default=5).")
     parser.add_argument("--neg_sample", default=5,
                         help="Number of negative samples to pick (default=5).")
-    parser.add_argument("--max_example", default=100,
-                        help="For testing on smaller number of examples (default=100).")
 
     args = parser.parse_args()
 
@@ -48,6 +48,8 @@ def train(args):
     embed_dim = args.embed_dim
     num_epochs = args.epochs
     lr = args.lr
+
+    run = Run.get_context()
 
     # For the reproducibility purpose
     torch.manual_seed(args.seed)
@@ -74,8 +76,9 @@ def train(args):
 
     for epoch in range(num_epochs):
         print(f"Epoch {epoch+1} started...")
-        loss = 0
+        epoch_loss = 0
         num_examples = 0
+        cycle_loss = 0
 
         for vi_ind, vo_ind, neg_samples_ind in data_handler.get_examples():
             vi = data_handler.get_one_hot_encoding(vi_ind).to(device)
@@ -90,17 +93,21 @@ def train(args):
             num_examples += 1
 
             curr_loss = model(vi, vo, neg_samples)
-            loss += curr_loss
+            epoch_loss += curr_loss
+            cycle_loss += curr_loss
             curr_loss.backward()
 
             optimizer.step()
 
             optimizer.zero_grad()
 
-            if num_examples == int(args.max_example):
-                break
+            if num_examples % 1000 == 0:
+                print(f"After {num_examples} examples, loss: {cycle_loss / 1000}")
+                cycle_loss = 0
 
-        print(f"Loss after {epoch+1} epoch: {loss / num_examples}")
+        print(f"Loss after {epoch+1} epoch: {epoch_loss / num_examples}")
+        run.log('loss', epoch_loss / num_examples)
+        print(f"Total number of examples: {num_examples}")
     
     params = model.get_trained_parameters()
     print("Saving model parameters...")

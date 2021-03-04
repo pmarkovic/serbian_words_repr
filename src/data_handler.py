@@ -49,7 +49,6 @@ class DataHandler:
         return self.get_cbow_example()
 
     def get_sg_example(self):
-        print("SG example")
         tokens = list(self.noise_dist.keys())
         tokens_prob = list(self.noise_dist.values())
 
@@ -72,7 +71,6 @@ class DataHandler:
                             yield center_ind, self.word2ind[sent[context_pos]], samples_ind
     
     def get_cbow_example(self):
-        print("CBOW example")
         tokens = list(self.noise_dist.keys())
         tokens_prob = list(self.noise_dist.values())
 
@@ -100,6 +98,9 @@ class DataHandler:
     def save_params(self, params, path):
         if params.requires_grad:
             params = params.detach()
+
+        if params.is_cuda:
+            params = params.cpu()
 
         with open(path, 'w') as txt_file:
             for ind, p in enumerate(params.numpy()):

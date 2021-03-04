@@ -11,7 +11,7 @@ from collections import defaultdict
 CORPORA = ["srWaC1.1.01", "srWaC1.1.02", "srWaC1.1.03", 
             "srWaC1.1.04", "srWaC1.1.05", "srWaC1.1.06"]
 CORPUS_PATH = os.path.join(os.path.dirname(os.getcwd()), "corpus")
-DATA_PATH = os.path.join(os.getcwd(), "data")
+DATA_PATH = "../data/srWaC1.1.01"
 TOKENS_DIST_FILE = "_token_dist.json"
 
 # Constants
@@ -19,14 +19,6 @@ TOKENS_DIST_FILE = "_token_dist.json"
 FENCE = '=' * 20
 # Token value for all number values in the corpus
 NUM_TOKEN = "NUM"
-# Limit number of tokens in vocabulary 
-# to include only tokens that appear more than 5 times
-LIMIT = 100000
-# Used for noise distribution
-ALPHA = 3/4
-# Minimum length of sentences 
-# that should be included into training examples
-MIN_LENGTH = 6
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", 
@@ -125,7 +117,6 @@ def parse_corpus(file_name):
 
 def transform_corpus():
     """
-    Transform_corpus function is the first step in the preprocessing phase.
     The corpus consists of 6 separate files in xml format and sentences are stored in <s> tags.
     This function simply creates separate processes to parse files.
     """
@@ -138,159 +129,85 @@ def transform_corpus():
     logging.info(f"Total transformation time: {round(time.time() - start_transform_time, 2)}s")
 
 
-def merge_tokens_dist():
+def get_train_set(data_path, corpus_name, limit, min_len, max_len, alpha):
     """
-    Merge_tokens_dist is the second step in the preprocessing phase.
-    Since tokens distributions of files are created separately, this function
-    merge them to the tokens distribution of the whole corpus. And stores it
-    as a json file in the data directory.
-    """
-
-    print("Start merging tokens distributions...")
-    merging_start_time = time.time()
-    total_tokens_dist = defaultdict(float)
-
-    # List directories in the data directory
-    for dir in os.listdir(DATA_PATH):
-        dir_path = os.path.join(DATA_PATH, dir)
-
-        # Ignore any file
-        if not os.path.isdir(dir_path):
-            continue
-        
-        for file in os.listdir(dir_path):
-            # Check for tokens distribution file
-            if file.endswith(TOKENS_DIST_FILE):
-                with open(f"{os.path.join(dir_path, file)}", 'r') as json_file:
-                    tokens_dist = json.load(json_file)
-
-                    # Merge tokens into single dictionary
-                    for key, value in tokens_dist.items():
-                        total_tokens_dist[key] += value
-
-    # Use only 100000 unique tokens for training (tokens that appear more than 5 times)
-    total_tokens_dist = {key: total_tokens_dist[key] \
-                  for key in sorted(total_tokens_dist, key=total_tokens_dist.__getitem__, reverse=True)[:LIMIT]}
-
-    # Store the tokens distribution of the whole corpus
-    with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'w') as json_file:
-        json.dump(total_tokens_dist, json_file, indent=4)
-
-    logging.info(f"Total merging time: {round(time.time() - merging_start_time, 2)}s")
-    print("Finished merging tokens distributions!")
-
-
-def clean_corpus():
-    """
-    Clean_corpus is the third step in the preprocessing phase.
     The function merge sentences from all processed files and 
     discard tokens from sentences if they are not included in tokens distribution.
     The first 100000 sentences from every file which length is at least 6 tokens are included.
     Lastly, the function prints minimum stats regarding corpus.
     """
 
-    print("Starting to clean the corpus...")
-    clean_start_time = time.time()
-    
-    # Basic stats of the corpus
-    total_num_sents = 0.0
-    avg_sent_len = 0.0
-    total_num_tokens = 0.0
-    train_num_sents = 0.0
-    avg_train_sent_len = 0.0
-    tokens_dist = {}
+    corpus_file = os.path.join(data_path, f"{corpus_name}.txt")
+    token_dist_file = os.path.join(data_path, f"{corpus_name}_token_dist.json")
+    train_set_file = os.path.join(data_path, "train_set.txt")
+    noise_dist_file = os.path.join(data_path, 'noise_dist.json')
 
+    num_train_sent = 0
+    avg_train_sent_len = 0
+    
     # Required for noise distribution
     total_num_train_tokens = 0.0
     noise_dist = defaultdict(float)
 
-    # Load tokens distribution
-    with open(f"{os.path.join(DATA_PATH, 'tokens_dist.json')}", 'r') as json_file:
+    with open(token_dist_file, 'r') as json_file:
         tokens_dist = json.load(json_file)
 
-    for dir in os.listdir(DATA_PATH):
-        dir_path = os.path.join(DATA_PATH, dir)
+    # Use the specified number of the most frequent unique tokens for training
+    tokens_dist = {key: tokens_dist[key] \
+                  for key in sorted(tokens_dist, key=tokens_dist.__getitem__, reverse=True)[:limit]}
 
-        # Ignore any file
-        if not os.path.isdir(dir_path):
-            continue
+    with open(corpus_file, 'r') as txt_file:
+        for line in txt_file:
+            # Discard tokens which are not in the final distribution
+            train_sent = [token for token in line.split(' ') if token in tokens_dist]
 
-        print(f"Processing {dir} directory...")
-        for file in os.listdir(dir_path):
+            if min_len < len(train_sent) <= max_len:
+                num_train_sent += 1
+                avg_train_sent_len += len(train_sent)
+                total_num_train_tokens += len(train_sent)
 
-            # Ignore non-text files
-            if not file.endswith(".txt"):
-                continue
+                for token in train_sent:
+                    noise_dist[token] += 1
             
-            with open(f"{os.path.join(dir_path, file)}", 'r') as txt_file:
-                for line in txt_file:
-                    tokens = line.split(' ')
-                    total_num_sents += 1
-                    total_num_tokens += len(tokens)
-                    avg_sent_len += len(tokens)
-                    train_sent = []
+                with open(train_set_file, 'a') as txt_file:
+                    txt_file.write(f"{' '.join(train_sent)}\n")
 
-                    for token in tokens:
-                        # Discard tokens which are not in the final distribution
-                        if token in tokens_dist:
-                            train_sent.append(token)
-                    
-                    # Discard sentences with legth less than 6
-                    if len(train_sent) < MIN_LENGTH:
-                        continue
+            if num_train_sent == limit:
+                break
 
-                    train_num_sents += 1
-                    avg_train_sent_len += len(train_sent)
-                    total_num_train_tokens += len(train_sent)
-
-                    for token in train_sent:
-                        noise_dist[token] += 1
-                
-                    with open(f"{os.path.join(DATA_PATH, 'train100.txt')}", 'a') as txt_file:
-                        txt_file.write(f"{' '.join(train_sent)}\n")
-                    
-                    # Include only first 100000 from every file
-                    if train_num_sents % LIMIT == 0:
-                        break
-    
     # Create noise distribution
     Z = 0.0
     for key in noise_dist.keys():
         noise_dist[key] /= total_num_train_tokens
-        noise_dist[key] **= ALPHA
+        noise_dist[key] **= alpha
         Z += noise_dist[key]
   
     for key in noise_dist.keys():
         noise_dist[key] /= Z
 
-    with open(f"{os.path.join(DATA_PATH, 'noise_dist.json')}", 'w') as json_file:
+    with open(noise_dist_file, 'w') as json_file:
         json.dump(noise_dist, json_file, indent=4)
 
-    print(f"Total number of sentences: {total_num_sents}")
-    print(f"Average sentence length: {round(avg_sent_len / total_num_sents, 2)}") 
-    print(f"Total number of tokens: {total_num_tokens}")
-    print()
-    print(f"Total number of train sentences: {train_num_sents}")
-    print(f"Average train sentence length: {round(avg_train_sent_len / train_num_sents, 2)}")
-    print()
-
-    logging.info(f"Total cleaning time: {round(time.time() - clean_start_time, 2)}s")
-    print("Finished cleaning the corpus!")
+    print(f"Total number of train sentences: {limit}")
+    print(f"Average train sentence length: {round(avg_train_sent_len / limit, 2)}")
+    print(f"Number of unique tokens in train set: {len(noise_dist.keys())}")
 
 
-def make_vocabulary():
+def make_vocabulary(data_path):
+    train_set_file = os.path.join(data_path, "train_set.txt")
+    word2ind_file = os.path.join(data_path, "word2ind.json")
+
     word2ind = dict()
     counter = 0
-    data_path = os.path.join(DATA_PATH, "train_set.txt")
 
-    with open(data_path, 'r') as file:
+    with open(train_set_file, 'r') as file:
         for sent in file:
             for word in sent.strip().split(' '):
                 if word not in word2ind:
                     word2ind[word] = counter
                     counter += 1
 
-    with open("data/word2ind.json", 'w', encoding="utf-8") as json_file:
+    with open(word2ind_file, 'w', encoding="utf-8") as json_file:
         json.dump(word2ind, json_file, indent=4)
 
 
@@ -299,9 +216,8 @@ if __name__ == "__main__":
     program_start_time = time.time()
 
     #transform_corpus()
-    #merge_tokens_dist()
-    clean_corpus()
-    #make_vocabulary()
+    get_train_set("./data", "srWaC1.1.01", 100000, 5, 20, 3/4)
+    make_vocabulary("./data")
 
     logging.info(f"Total time: {round(time.time() - program_start_time, 2)}s")
     logging.info(f"{FENCE}Program finished{FENCE}")
