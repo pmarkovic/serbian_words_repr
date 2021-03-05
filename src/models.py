@@ -43,6 +43,7 @@ class CBOW(nn.Module):
 
     def __init__(self, voc_size, embed_dim):
         super(CBOW, self).__init__()
+        self.embed_dim = embed_dim
 
         # Center word embeddings
         self.V = Parameter(torch.randn(voc_size, embed_dim))
@@ -52,24 +53,23 @@ class CBOW(nn.Module):
     def forward(self, vo, vi, neg_samples):
         vo_embed = vo @ self.V
 
-        print(f"vo_embed: {vo_embed.shape}")
+        # Calculate context embeddings for every example in batch
+        # One example in batch consists of multiple embeddings
 
-        # Get context embeddings for each context word and
-        # average them to one context embedding vector
-        vi_embed = torch.matmul(vi, self.U).mean(dim=1)
-        print(f"vi: {vi.shape}")
-        print(f"vi_embed: {vi_embed.shape}")
+        # Obtain embeddings from U (matrix for context embeddings)
+        vi_temp = torch.matmul(vi, self.U)
+        # Mask: for every example in batch store True for every embedding which is non-zero
+        mask = vi.abs().sum(dim=2) != 0
+        # Calculate how many non-zero embeddings per example
+        mask_sum = mask.float().sum(dim=1).unsqueeze(1)
+        # Calculate mean of all context embeddings per example in batch
+        vi_embed = vi_temp.sum(dim=1) / mask_sum.expand(mask_sum.size(0), self.embed_dim)
 
         left = F.logsigmoid(torch.sum(vo_embed * vi_embed, dim=1, keepdim=True))
 
-        print(f"left: {left.shape}")
-
         neg_samples_embed = torch.matmul(neg_samples, self.U)
-        print(f"neg_samples_embed: {neg_samples_embed.shape}")
         batch_mul = torch.bmm(neg_samples_embed, vo_embed.unsqueeze(dim=2)).squeeze()
-        print(f"batch_mul: {batch_mul.shape}")
         right = torch.sum(F.logsigmoid(-1*batch_mul), dim=1, keepdim=True)
-        print(f"right: {right.shape}")
 
         return torch.mean(-1*(left + right))
 

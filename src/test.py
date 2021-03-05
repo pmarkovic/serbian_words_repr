@@ -80,7 +80,7 @@ def get_sg_example(bs, wind):
 
 
 def train():
-    embed_dim = 5
+    embed_dim = 300
     num_epochs = 1
 
     # For the reproducibility purpose
@@ -101,12 +101,18 @@ def train():
         model = CBOW(76431, embed_dim)
     model.to(device)
 
-    for batch_ind, batch in enumerate(get_cbow_example(10, 2)):
-        print(batch[1])
-        break
-
+    wind = 2
+    for batch_ind, batch in enumerate(get_cbow_example(10, wind)):
         vi = F.one_hot(torch.tensor(batch[0]), num_classes=76431).float().to(device)
-        vo = F.one_hot(torch.tensor(batch[1]), num_classes=76431).float().to(device)
+        
+        if False:
+            vo = F.one_hot(torch.tensor(batch[1]), num_classes=76431).float().to(device)
+        else:
+            one_hot = [F.pad(F.one_hot(torch.tensor(e), num_classes=76431), (0, 0, 0, 2*wind-len(e))) for e in batch[1]]
+            vo = torch.stack(one_hot).float()
+
+            print(vo.shape)
+
         neg_samples = F.one_hot(torch.tensor(batch[2]), num_classes=76431).float().to(device)
 
         curr_loss = model(vi, vo, neg_samples)
