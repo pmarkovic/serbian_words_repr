@@ -129,7 +129,7 @@ def transform_corpus():
     logging.info(f"Total transformation time: {round(time.time() - start_transform_time, 2)}s")
 
 
-def get_train_set(data_path, corpus_name, limit, min_len, max_len, alpha):
+def get_train_set(data_path, corpus_name, token_limit, sent_limit, min_len, max_len, alpha):
     """
     The function merge sentences from all processed files and 
     discard tokens from sentences if they are not included in tokens distribution.
@@ -154,7 +154,7 @@ def get_train_set(data_path, corpus_name, limit, min_len, max_len, alpha):
 
     # Use the specified number of the most frequent unique tokens for training
     tokens_dist = {key: tokens_dist[key] \
-                  for key in sorted(tokens_dist, key=tokens_dist.__getitem__, reverse=True)[:limit]}
+                  for key in sorted(tokens_dist, key=tokens_dist.__getitem__, reverse=True)[:token_limit]}
 
     with open(corpus_file, 'r') as txt_file:
         for line in txt_file:
@@ -172,7 +172,8 @@ def get_train_set(data_path, corpus_name, limit, min_len, max_len, alpha):
                 with open(train_set_file, 'a') as txt_file:
                     txt_file.write(f"{' '.join(train_sent)}\n")
 
-            if num_train_sent == limit:
+            # Use only sent_limit sentences for training
+            if num_train_sent == sent_limit:
                 break
 
     # Create noise distribution
@@ -188,12 +189,16 @@ def get_train_set(data_path, corpus_name, limit, min_len, max_len, alpha):
     with open(noise_dist_file, 'w') as json_file:
         json.dump(noise_dist, json_file, indent=4)
 
-    print(f"Total number of train sentences: {limit}")
-    print(f"Average train sentence length: {round(avg_train_sent_len / limit, 2)}")
+    print(f"Total number of train sentences: {sent_limit}")
+    print(f"Average train sentence length: {round(avg_train_sent_len / sent_limit, 2)}")
     print(f"Number of unique tokens in train set: {len(noise_dist.keys())}")
 
 
 def make_vocabulary(data_path):
+    """
+    Function to create vocabulary for translating words to indices.
+    """
+    
     train_set_file = os.path.join(data_path, "train_set.txt")
     word2ind_file = os.path.join(data_path, "word2ind.json")
 
@@ -216,7 +221,7 @@ if __name__ == "__main__":
     program_start_time = time.time()
 
     #transform_corpus()
-    get_train_set("./data", "srWaC1.1.01", 100000, 5, 20, 3/4)
+    get_train_set("./data", "srWaC1.1.01", 20000, 10000, 5, 20, 3/4)
     make_vocabulary("./data")
 
     logging.info(f"Total time: {round(time.time() - program_start_time, 2)}s")

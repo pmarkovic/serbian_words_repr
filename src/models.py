@@ -1,7 +1,5 @@
-from numpy import left_shift
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
@@ -21,15 +19,21 @@ class SkipGram(nn.Module):
         self.U = Parameter(torch.randn(voc_size, embed_dim))
 
     def forward(self, vi, vo, neg_samples):
+        # Obtain corresponding embeddings from matrices (V for center, U for context)
         vi_embed = vi @ self.V
         vo_embed = vo @ self.U
 
+        # Dot product between center and context embeddings for every example
+        # And calculate logsigmoid
         left = F.logsigmoid(torch.sum(vi_embed * vo_embed, dim=1, keepdim=True))
 
+        # Calculating dot product between neg samples and center embedding for every example
+        # And calculate logsigmoid for loss
         neg_samples_embed = torch.matmul(neg_samples, self.U)
         batch_mul = torch.bmm(neg_samples_embed, vi_embed.unsqueeze(dim=2)).squeeze()
         right = torch.sum(F.logsigmoid(-1*batch_mul), dim=1, keepdim=True)
 
+        # Final loss and mean over all examples
         return torch.mean(-1*(left + right))
 
     def get_trained_parameters(self):
@@ -51,6 +55,7 @@ class CBOW(nn.Module):
         self.U = Parameter(torch.randn(voc_size, embed_dim))
 
     def forward(self, vo, vi, neg_samples):
+        # Obtain embeddings from V (matrix for center embeddings)
         vo_embed = vo @ self.V
 
         # Calculate context embeddings for every example in batch
@@ -63,14 +68,21 @@ class CBOW(nn.Module):
         # Calculate how many non-zero embeddings per example
         mask_sum = mask.float().sum(dim=1).unsqueeze(1)
         # Calculate mean of all context embeddings per example in batch
+        # Had to use mask and calculate mean this way due to different number of 
+        # embeddings per examples (center words doesn't have the same number of context words)
         vi_embed = vi_temp.sum(dim=1) / mask_sum.expand(mask_sum.size(0), self.embed_dim)
 
+        # Dot product between center and mean context embeddings for every example
+        # And calculate logsigmoid for loss
         left = F.logsigmoid(torch.sum(vo_embed * vi_embed, dim=1, keepdim=True))
 
+        # Calculating dot product between neg samples and center embedding for every example
+        # And calculate logsigmoid for loss
         neg_samples_embed = torch.matmul(neg_samples, self.U)
         batch_mul = torch.bmm(neg_samples_embed, vo_embed.unsqueeze(dim=2)).squeeze()
         right = torch.sum(F.logsigmoid(-1*batch_mul), dim=1, keepdim=True)
 
+        # Final loss and mean over all examples
         return torch.mean(-1*(left + right))
 
     def get_trained_parameters(self):

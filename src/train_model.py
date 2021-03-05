@@ -4,6 +4,7 @@ import numpy as np
 
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 
 from azureml.core import Run
 
@@ -30,14 +31,16 @@ def arg_parser():
                         help="Dimension of embeddings (default=300).")
     parser.add_argument("--epochs", default=5,
                         help="Number of training epochs (default=5).")
-    parser.add_argument("--lr", default=0.01,
-                        help="Learning rate for optimizer (default=0.01).")
+    parser.add_argument("--lr", default=0.025,
+                        help="Learning rate for optimizer (default=0.025).")
     parser.add_argument("--seed", default=892,
                         help="Seed for random numbers generator (default=892).")
     parser.add_argument("--wind_size", default=5, 
                         help="Max window size for surrounding context words (default=5).")
     parser.add_argument("--neg_sample", default=5,
                         help="Number of negative samples to pick (default=5).")
+    parser.add_argument("--batch_size", default=128,
+                        help="Size of batches during training (default=128).")
 
     args = parser.parse_args()
 
@@ -45,10 +48,15 @@ def arg_parser():
 
 
 def train(args):
+    """
+    Function for training models.
+    """
+
     embed_dim = args.embed_dim
     num_epochs = args.epochs
-    lr = args.lr
+    init_lr = args.lr
 
+    # For monitoring on Azure
     run = Run.get_context()
 
     # For the reproducibility purpose
@@ -64,34 +72,48 @@ def train(args):
     print(f"Embed dim: {embed_dim}")
 
     data_handler = DataHandler(args.data_path, args.w2i_path, args.nd_path,
-                               args.is_sg, args.wind_size, args.neg_sample)
+                               args.is_sg, args.wind_size, args.neg_sample, args.batch_size)
+
+    voc_size = data_handler.get_voc_size()
+    print(f"Voc size: {voc_size}")
 
     if args.is_sg:
-        model = SkipGram(data_handler.get_voc_size(), embed_dim)
+        model = SkipGram(voc_size, embed_dim)
     else:
-        model = CBOW(data_handler.get_voc_size(), embed_dim)
+        model = CBOW(voc_size, embed_dim)
     model.to(device)
 
-    optimizer = optim.SGD(model.parameters(), lr=lr)
+    optimizer = optim.SGD(model.parameters(), lr=init_lr)
+
+    loss_per_epoch = []
 
     for epoch in range(num_epochs):
         print(f"Epoch {epoch+1} started...")
         epoch_loss = 0
-        num_examples = 0
         cycle_loss = 0
 
-        for vi_ind, vo_ind, neg_samples_ind in data_handler.get_examples():
-            vi = data_handler.get_one_hot_encoding(vi_ind).to(device)
+        # Update lr by decreasing it linearly for every epoch
+        lr = init_lr * (1.0 - (1.0 * epoch) / num_epochs)
+        print(f"Lr: {lr}")
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
+        for batch_ind, batch in enumerate(data_handler.get_examples()):
+            # Create one hot encoding for every tokens (center, context, neg samples) and examples
+
+            vi = F.one_hot(torch.tensor(batch[0]), num_classes=voc_size).float().to(device)
+        
             if args.is_sg:
-                vo = data_handler.get_one_hot_encoding(vo_ind).to(device)
+                vo = F.one_hot(torch.tensor(batch[1]), num_classes=voc_size).float().to(device)
             else:
-                vo = torch.stack(list(map(data_handler.get_one_hot_encoding, 
-                                            vo_ind))).to(device)
-            neg_samples = torch.stack(list(map(data_handler.get_one_hot_encoding, 
-                                                neg_samples_ind))).to(device)
-            num_examples += 1
+                # Had to do padding due to different number of context tokes per example
+                one_hot = [F.pad(F.one_hot(torch.tensor(e), num_classes=voc_size), 
+                                            (0, 0, 0, 2*args.wind_size-len(e))) for e in batch[1]]
+                vo = torch.stack(one_hot).float()
 
+            neg_samples = F.one_hot(torch.tensor(batch[2]), num_classes=voc_size).float().to(device)
+
+            # Calculate loss
             curr_loss = model(vi, vo, neg_samples)
             epoch_loss += curr_loss
             cycle_loss += curr_loss
@@ -101,17 +123,22 @@ def train(args):
 
             optimizer.zero_grad()
 
-            if num_examples % 1000 == 0:
-                print(f"After {num_examples} examples, loss: {cycle_loss / 1000}")
+            if batch_ind % 100 == 0:
+                print(f"After {batch_ind} batches, loss: {cycle_loss / 100}")
                 cycle_loss = 0
 
-        print(f"Loss after {epoch+1} epoch: {epoch_loss / num_examples}")
-        run.log('loss', epoch_loss / num_examples)
-        print(f"Total number of examples: {num_examples}")
+        print(f"Loss after {epoch+1} epoch: {epoch_loss / batch_ind}")
+        loss_per_epoch.append(epoch_loss / batch_ind)
+
+        run.log('loss', epoch_loss / batch_ind)
+        print(f"Total number of examples: {batch_ind * args.batch_size}")
     
     params = model.get_trained_parameters()
     print("Saving model parameters...")
     data_handler.save_params(params, args.params_path)
+    print("Training is finished...")
+
+    print(f"Epoch losses: {' '.join(list(map(str, loss_per_epoch)))}")
 
 
 if __name__ == "__main__":
