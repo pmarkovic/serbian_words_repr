@@ -109,7 +109,7 @@ def train(args):
                 # Had to do padding due to different number of context tokes per example
                 one_hot = [F.pad(F.one_hot(torch.tensor(e), num_classes=voc_size), 
                                             (0, 0, 0, 2*args.wind_size-len(e))) for e in batch[1]]
-                vo = torch.stack(one_hot).float()
+                vo = torch.stack(one_hot).float().to(device)
 
             neg_samples = F.one_hot(torch.tensor(batch[2]), num_classes=voc_size).float().to(device)
 

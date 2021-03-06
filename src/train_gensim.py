@@ -13,6 +13,6 @@ if __name__ == "__main__":
     
     corpus_reader = ReadCorpus()
 
-    gen_model = models.Word2Vec(sentences=corpus_reader, size=300, window=4, min_count=0, sg=1)
+    gen_model = models.Word2Vec(sentences=corpus_reader, size=300, window=5, min_count=0)
 
     gen_model.save("/content/gdrive/MyDrive/Colab_Notebooks/gen_sg300.txt")
