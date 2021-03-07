@@ -1,4 +1,5 @@
 import os
+from os.path import join
 import time
 import json
 import logging
@@ -129,7 +130,7 @@ def transform_corpus():
     logging.info(f"Total transformation time: {round(time.time() - start_transform_time, 2)}s")
 
 
-def get_train_set(data_path, corpus_name, token_limit, sent_limit, min_len, max_len, alpha):
+def get_train_set(data_path, corpus_name, token_limit, min_len, max_len, alpha):
     """
     The function merge sentences from all processed files and 
     discard tokens from sentences if they are not included in tokens distribution.
@@ -144,6 +145,7 @@ def get_train_set(data_path, corpus_name, token_limit, sent_limit, min_len, max_
 
     num_train_sent = 0
     avg_train_sent_len = 0
+    more_then_5_tokens = 0
     
     # Required for noise distribution
     total_num_train_tokens = 0.0
@@ -158,22 +160,28 @@ def get_train_set(data_path, corpus_name, token_limit, sent_limit, min_len, max_
 
     with open(corpus_file, 'r') as txt_file:
         for line in txt_file:
-            # Discard tokens which are not in the final distribution
-            train_sent = [token for token in line.split(' ') if token in tokens_dist]
+            tokens = line.split(' ')
 
-            if min_len < len(train_sent) <= max_len:
+            # Discard tokens which are not in the final distribution
+            train_sent = [token for token in tokens if token in tokens_dist]
+
+            if min_len < len(train_sent) <= max_len and len(train_sent) >= 0.8*len(tokens):
                 num_train_sent += 1
                 avg_train_sent_len += len(train_sent)
                 total_num_train_tokens += len(train_sent)
 
                 for token in train_sent:
                     noise_dist[token] += 1
+
+                    # Count which tokens appeared at least 5 times
+                    if noise_dist[token] == 5:
+                        more_then_5_tokens += 1
             
                 with open(train_set_file, 'a') as txt_file:
                     txt_file.write(f"{' '.join(train_sent)}\n")
 
-            # Use only sent_limit sentences for training
-            if num_train_sent == sent_limit:
+            # Stop when all tokens appeared at least 5 times
+            if more_then_5_tokens == token_limit:
                 break
 
     # Create noise distribution
@@ -189,8 +197,8 @@ def get_train_set(data_path, corpus_name, token_limit, sent_limit, min_len, max_
     with open(noise_dist_file, 'w') as json_file:
         json.dump(noise_dist, json_file, indent=4)
 
-    print(f"Total number of train sentences: {sent_limit}")
-    print(f"Average train sentence length: {round(avg_train_sent_len / sent_limit, 2)}")
+    print(f"Total number of train sentences: {num_train_sent}")
+    print(f"Average train sentence length: {round(avg_train_sent_len / num_train_sent, 2)}")
     print(f"Number of unique tokens in train set: {len(noise_dist.keys())}")
 
 
@@ -201,8 +209,10 @@ def make_vocabulary(data_path):
     
     train_set_file = os.path.join(data_path, "train_set.txt")
     word2ind_file = os.path.join(data_path, "word2ind.json")
+    ind2word_file = os.path.join(data_path, "ind2word.json")
 
-    word2ind = dict()
+    word2ind = {}
+    ind2word = {}
     counter = 0
 
     with open(train_set_file, 'r') as file:
@@ -210,10 +220,14 @@ def make_vocabulary(data_path):
             for word in sent.strip().split(' '):
                 if word not in word2ind:
                     word2ind[word] = counter
+                    ind2word[counter] = word
                     counter += 1
 
     with open(word2ind_file, 'w', encoding="utf-8") as json_file:
-        json.dump(word2ind, json_file, indent=4)
+        json.dump(word2ind, json_file, indent=2)
+
+    with open(ind2word_file, 'w', encoding="utf-8") as json_file:
+        json.dump(ind2word, json_file, indent=2)
 
 
 if __name__ == "__main__":
@@ -221,7 +235,7 @@ if __name__ == "__main__":
     program_start_time = time.time()
 
     #transform_corpus()
-    get_train_set("./data", "srWaC1.1.01", 20000, 10000, 5, 20, 3/4)
+    get_train_set("./data", "srWaC1.1.01", 20000, 5, 20, 3/4)
     make_vocabulary("./data")
 
     logging.info(f"Total time: {round(time.time() - program_start_time, 2)}s")
