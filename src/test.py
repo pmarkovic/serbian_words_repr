@@ -80,7 +80,7 @@ def use_weights(args):
         y = vectors[1] - vectors[0] + vectors[2]
         dist = F.cosine_similarity(weights, y.unsqueeze(dim=0))
 
-        index_sorted = torch.argsort(dist, descending=True)[1:]
+        index_sorted = torch.argsort(dist, descending=True)
         top_10 = index_sorted[:10]
         top_10_words = [ind2word[str(int(ind))] for ind in top_10]
 
