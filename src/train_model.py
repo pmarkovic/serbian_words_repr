@@ -12,19 +12,18 @@ from models import SkipGram, CBOW
 from data_handler import DataHandler
 
 
+VOC_SIZE = 20000
+
+
 def arg_parser():
     """ takes user input """
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--data_path", default="data/train_set.txt",
-                        help="Path to the training data (default=data/train_set.txt).")
-    parser.add_argument("--w2i_path", default="data/word2ind.json",
-                        help="Path to the word2ind dict (default=data/word2ind.json).")
-    parser.add_argument("--nd_path", default="data/noise_dist.json",
-                        help="Path to the noise dist dict (default=data/noise_dist.json).")
-    parser.add_argument("--params_path", default="data/params.txt", 
-                        help="Path where to store trained parameters/embeddings (default=data/params.txt).")
+    parser.add_argument("--data_path", default="data/cbow_examples.csv",
+                        help="Path to the training data (default=data/cbow_examples.csv).")
+    parser.add_argument("--weights_dir", default="weights", 
+                        help="Path where to store trained weights/embeddings (default=weights).")
     parser.add_argument("--is_sg", default=False, action="store_true",
                         help="Flag to indicate which model to use (default=False).")
     parser.add_argument("--embed_dim", default=300,
@@ -35,12 +34,10 @@ def arg_parser():
                         help="Learning rate for optimizer (default=0.025).")
     parser.add_argument("--seed", default=892,
                         help="Seed for random numbers generator (default=892).")
-    parser.add_argument("--wind_size", default=3, 
-                        help="Max window size for surrounding context words (default=3).")
-    parser.add_argument("--neg_sample", default=5,
-                        help="Number of negative samples to pick (default=5).")
     parser.add_argument("--batch_size", default=128,
                         help="Size of batches during training (default=128).")
+    parser.add_argument("--n_examples", default=1000000, 
+                        help="Number of training examples per epoch (default=1000000).")
 
     args = parser.parse_args()
 
@@ -71,16 +68,12 @@ def train(args):
     print(f"Is SG: {args.is_sg}")
     print(f"Embed dim: {embed_dim}")
 
-    data_handler = DataHandler(args.data_path, args.w2i_path, args.nd_path,
-                               args.is_sg, args.wind_size, args.neg_sample, args.batch_size)
-
-    voc_size = data_handler.get_voc_size()
-    print(f"Voc size: {voc_size}")
+    data_handler = DataHandler(args.data_path, VOC_SIZE, args.n_examples, args.is_sg, args.batch_size)
 
     if args.is_sg:
-        model = SkipGram(voc_size, embed_dim)
+        model = SkipGram(VOC_SIZE, embed_dim)
     else:
-        model = CBOW(voc_size, embed_dim)
+        model = CBOW(VOC_SIZE, embed_dim)
     model.to(device)
 
     optimizer = optim.SGD(model.parameters(), lr=init_lr)
@@ -101,17 +94,17 @@ def train(args):
         for batch_ind, batch in enumerate(data_handler.get_examples()):
             # Create one hot encoding for every tokens (center, context, neg samples) and examples
 
-            vi = F.one_hot(torch.tensor(batch[0]), num_classes=voc_size).float().to(device)
+            vi = F.one_hot(torch.tensor(batch[0]), num_classes=VOC_SIZE).float().to(device)
         
             if args.is_sg:
-                vo = F.one_hot(torch.tensor(batch[1]), num_classes=voc_size).float().to(device)
+                vo = F.one_hot(torch.tensor(batch[1]), num_classes=VOC_SIZE).float().to(device)
             else:
                 # Had to do padding due to different number of context tokes per example
-                one_hot = [F.pad(F.one_hot(torch.tensor(e), num_classes=voc_size), 
+                one_hot = [F.pad(F.one_hot(torch.tensor(e), num_classes=VOC_SIZE), 
                                             (0, 0, 0, 2*args.wind_size-len(e))) for e in batch[1]]
                 vo = torch.stack(one_hot).float().to(device)
 
-            neg_samples = F.one_hot(torch.tensor(batch[2]), num_classes=voc_size).float().to(device)
+            neg_samples = F.one_hot(torch.tensor(batch[2]), num_classes=VOC_SIZE).float().to(device)
 
             # Calculate loss
             curr_loss = model(vi, vo, neg_samples)
@@ -133,12 +126,26 @@ def train(args):
         run.log('loss', epoch_loss / batch_ind)
         print(f"Total number of examples: {batch_ind * args.batch_size}")
     
-    params = model.get_trained_parameters()
     print("Saving model parameters...")
-    data_handler.save_params(params, args.params_path)
-    print("Training is finished...")
+    params = model.get_trained_parameters()
+    save_params(params, args.params_path)
 
+    print("Training is finished...")
     print(f"Epoch losses: {' '.join(list(map(str, loss_per_epoch)))}")
+
+
+def save_params(params, path):
+    """
+    Method to save trained parameters.
+    """
+
+    if params.requires_grad:
+        params = params.detach()
+
+    if params.is_cuda:
+        params = params.cpu()
+
+    torch.save(params, path)
 
 
 if __name__ == "__main__":
