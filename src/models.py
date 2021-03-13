@@ -13,10 +13,10 @@ class SkipGram(nn.Module):
         super(SkipGram, self).__init__()
 
         # Center word embeddings
-        self.V = Parameter(torch.randn(voc_size, embed_dim))
+        self.V = Parameter(torch.FloatTensor(voc_size, embed_dim).uniform_(-0.5, 0.5) / embed_dim)
 
         # Context word embeddings
-        self.U = Parameter(torch.randn(voc_size, embed_dim))
+        self.U = Parameter(torch.FloatTensor(voc_size, embed_dim).uniform_(-0.5, 0.5) / embed_dim)
 
     def forward(self, vi, vo, neg_samples):
         # Obtain corresponding embeddings from matrices (V for center, U for context)
@@ -50,9 +50,9 @@ class CBOW(nn.Module):
         self.embed_dim = embed_dim
 
         # Center word embeddings
-        self.V = Parameter(torch.randn(voc_size, embed_dim))
+        self.V = Parameter(torch.FloatTensor(voc_size, embed_dim).uniform_(-0.5, 0.5) / embed_dim)
         # Context word embeddings
-        self.U = Parameter(torch.randn(voc_size, embed_dim))
+        self.U = Parameter(torch.FloatTensor(voc_size, embed_dim).uniform_(-0.5, 0.5) / embed_dim)
 
     def forward(self, vo, vi, neg_samples):
         # Obtain embeddings from V (matrix for center embeddings)

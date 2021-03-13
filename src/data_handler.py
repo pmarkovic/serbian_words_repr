@@ -10,15 +10,15 @@ class DataHandler:
 
     def __init__(self, 
                 examples_path,
-                voc_size,
                 n_examples,
+                sample,
                 is_sg,
                 batch_size):
 
         self.examples_path = examples_path
         self.is_sg = is_sg
-        self.voc_size = voc_size
         self.n_examples = n_examples
+        self.sample = sample
         self.bs = batch_size
 
     def get_examples(self):
@@ -32,7 +32,7 @@ class DataHandler:
         neg_samples_pos = []
         
         print("Choose indices")
-        example_indices = np.random.choice(self.voc_size, size=self.n_examples, replace=False)
+        example_indices = np.random.choice(self.n_examples, size=self.sample, replace=False)
 
         print("Collecting examples...")
         for ind in example_indices:

@@ -13,6 +13,8 @@ from data_handler import DataHandler
 
 
 VOC_SIZE = 20000
+CBOW_EXAMPLES = 17320210
+SG_EXAMPLES = 74904934
 
 
 def arg_parser():
@@ -34,9 +36,11 @@ def arg_parser():
                         help="Learning rate for optimizer (default=0.025).")
     parser.add_argument("--seed", default=892,
                         help="Seed for random numbers generator (default=892).")
+    parser.add_argument("--wind_size", default=3,
+                        help="Maximal window size for context (default=3).")
     parser.add_argument("--batch_size", default=128,
                         help="Size of batches during training (default=128).")
-    parser.add_argument("--n_examples", default=1000000, 
+    parser.add_argument("--sample", default=1000000, 
                         help="Number of training examples per epoch (default=1000000).")
 
     args = parser.parse_args()
@@ -52,6 +56,7 @@ def train(args):
     embed_dim = args.embed_dim
     num_epochs = args.epochs
     init_lr = args.lr
+    n_examples = SG_EXAMPLES if args.is_sg else CBOW_EXAMPLES
 
     # For monitoring on Azure
     run = Run.get_context()
@@ -68,7 +73,7 @@ def train(args):
     print(f"Is SG: {args.is_sg}")
     print(f"Embed dim: {embed_dim}")
 
-    data_handler = DataHandler(args.data_path, VOC_SIZE, args.n_examples, args.is_sg, args.batch_size)
+    data_handler = DataHandler(args.data_path, n_examples, args.sample, args.is_sg, args.batch_size)
 
     if args.is_sg:
         model = SkipGram(VOC_SIZE, embed_dim)
