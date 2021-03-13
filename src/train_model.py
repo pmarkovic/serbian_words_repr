@@ -134,7 +134,7 @@ def train(args):
         if (epoch+1) % 5 == 0:
             params = model.get_trained_parameters()
             print("Saving model parameters...")
-            save_params(params, args.weights_path + f"_ep{epoch+1}.pt")
+            save_params(params, args.weights_path + f"ep{epoch+1}.pt")
 
     print("Training is finished...")
     print(f"Epoch losses: {' '.join(list(map(str, loss_per_epoch)))}")
