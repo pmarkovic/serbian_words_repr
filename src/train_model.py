@@ -22,8 +22,8 @@ def arg_parser():
 
     parser.add_argument("--data_path", default="data/cbow_examples.csv",
                         help="Path to the training data (default=data/cbow_examples.csv).")
-    parser.add_argument("--weights_dir", default="weights", 
-                        help="Path where to store trained weights/embeddings (default=weights).")
+    parser.add_argument("--weights_path", default="weights/cbow300_", 
+                        help="Path where to store trained weights/embeddings (default=weights/cbow300_).")
     parser.add_argument("--is_sg", default=False, action="store_true",
                         help="Flag to indicate which model to use (default=False).")
     parser.add_argument("--embed_dim", default=300,
@@ -116,8 +116,8 @@ def train(args):
 
             optimizer.zero_grad()
 
-            if batch_ind % 100 == 0:
-                print(f"After {batch_ind} batches, loss: {cycle_loss / 100}")
+            if batch_ind % 1000 == 0:
+                print(f"After {batch_ind} batches, loss: {cycle_loss / 1000}")
                 cycle_loss = 0
 
         print(f"Loss after {epoch+1} epoch: {epoch_loss / batch_ind}")
@@ -126,9 +126,10 @@ def train(args):
         run.log('loss', epoch_loss / batch_ind)
         print(f"Total number of examples: {batch_ind * args.batch_size}")
     
-    print("Saving model parameters...")
-    params = model.get_trained_parameters()
-    save_params(params, args.params_path)
+        if (epoch+1) % 5 == 0:
+            params = model.get_trained_parameters()
+            print("Saving model parameters...")
+            save_params(params, args.weights_path + f"_ep{epoch+1}.pt")
 
     print("Training is finished...")
     print(f"Epoch losses: {' '.join(list(map(str, loss_per_epoch)))}")
