@@ -1,5 +1,4 @@
 import os
-from os.path import join
 import time
 import json
 import logging
@@ -132,10 +131,16 @@ def transform_corpus():
 
 def get_train_set(data_path, corpus_name, token_limit, min_len, max_len, alpha):
     """
-    The function merge sentences from all processed files and 
-    discard tokens from sentences if they are not included in tokens distribution.
-    The first 100000 sentences from every file which length is at least 6 tokens are included.
-    Lastly, the function prints minimum stats regarding corpus.
+    The function create training set from specified file (corpus_name).
+    The most frequent token_limit number of tokens are selected.
+    From sentences tokens that are not included for training are filtered out.
+    And only sentences that are between min_len and max_len long and which 
+    preserved at least 80% of tokens are included. Sentences are selected 
+    until all tokens appear at least 5 times.
+    
+    After creating training set, noise distribution is calculated.
+    
+    Lastly, the function prints minimum regarding training set.
     """
 
     corpus_file = os.path.join(data_path, f"{corpus_name}.txt")
@@ -204,7 +209,7 @@ def get_train_set(data_path, corpus_name, token_limit, min_len, max_len, alpha):
 
 def make_vocabulary(data_path):
     """
-    Function to create vocabulary for translating words to indices.
+    Function to create vocabularies for translating words to indices and vice-verse.
     """
     
     train_set_file = os.path.join(data_path, "train_set.txt")

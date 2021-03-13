@@ -1,6 +1,4 @@
 import os
-import csv
-from src.preprocessing import parse
 import time
 import json
 import argparse
@@ -15,7 +13,7 @@ def arg_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--path", default="./data",
-                        help="Path to the training data (default=.data).")
+                        help="Path to the training data (default=./data).")
     parser.add_argument("--name", default="train_set.txt",
                         help="Name of training set (default=train_set.txt)")
     parser.add_argument("--sep_file", default=False, action="store_true",

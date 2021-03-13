@@ -35,8 +35,8 @@ def arg_parser():
                         help="Learning rate for optimizer (default=0.025).")
     parser.add_argument("--seed", default=892,
                         help="Seed for random numbers generator (default=892).")
-    parser.add_argument("--wind_size", default=5, 
-                        help="Max window size for surrounding context words (default=5).")
+    parser.add_argument("--wind_size", default=3, 
+                        help="Max window size for surrounding context words (default=3).")
     parser.add_argument("--neg_sample", default=5,
                         help="Number of negative samples to pick (default=5).")
     parser.add_argument("--batch_size", default=128,
