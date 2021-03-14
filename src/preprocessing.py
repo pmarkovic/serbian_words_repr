@@ -239,7 +239,7 @@ if __name__ == "__main__":
     logging.info(f"{FENCE}Program started{FENCE}")
     program_start_time = time.time()
 
-    #transform_corpus()
+    transform_corpus()
     get_train_set("./data", "srWaC1.1.01", 20000, 5, 20, 3/4)
     make_vocabulary("./data")
 

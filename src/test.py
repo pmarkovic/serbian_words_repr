@@ -115,6 +115,10 @@ def use_gen_model(args):
 
 
 if __name__ == "__main__":
+    """
+    Script to perform analogy test.
+    """
+    
     args = arg_parser()
 
     analogy_test(args)

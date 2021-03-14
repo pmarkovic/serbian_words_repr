@@ -37,6 +37,9 @@ def check_example(args):
 
 
 if __name__ == "__main__":
+    """
+    Script for checking retrieved most similar words for a particular example.
+    """
     args = arg_parser()
 
     check_example(args)
