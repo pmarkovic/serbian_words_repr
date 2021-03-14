@@ -1,6 +1,3 @@
-corpus/
 .vscode/
 data/
-preprocessing.log
-.azureml
 __pycache__
