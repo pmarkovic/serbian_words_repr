@@ -32,6 +32,8 @@ def create_sep_files(args):
     with open(train_set_path, 'r') as txt_file:
         train_set = txt_file.readlines()
 
+    # Remove the last sentences so that all files contain 
+    # equal number of sentences
     train_set_size = len(train_set) - 1
     batch = train_set_size // 10
 
@@ -156,6 +158,10 @@ def crete_examples(args):
 
 
 if __name__ == "__main__":
+    """
+    Script for creating training examples.
+    """
+
     args = arg_parser()
 
     if args.sep_file:
